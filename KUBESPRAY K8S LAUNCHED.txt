@@ -1,0 +1,85 @@
+@@ KUBESPRAY K8S LAUNCHED @@
+---------------------------------
+
+firstly launched the 2 virtual machines on AWS cloud
+type - t2.medium
+ubuntu - 22.04
+
+vm-1 - master
+vm-2 - worker
+___________________________________________________________________________________________________________________________________________________________________-
+
+
+Step 1) Generate SSH keygen on master vm :
+sudo su -
+ssh-keygen
+cd .ssh - then copy .pub file content in authorize_keys file
+on current master machine as well on worker machine 
+
+
+Step 2) Configure Kubespray Node :
+sudo apt update
+sudo apt install git python3 python3-pip -y
+git clone https://github.com/kubernetes-incubator/kubespray.git
+cd kubespray
+pip install -r requirements.txt
+
+ansible --version
+_____________________________________________________________________________________________________________________________________________________________________
+
+
+Step 3) Create the hosts inventory, run below commands and don’t forget to replace IP address that suits to your deployment  :
+cp -rfp inventory/sample inventory/mycluster
+declare -a IPS=(192.168.1.241 192.168.1.241) --- {mention the private ips of master vm and worker vm}
+CONFIG_FILE=inventory/mycluster/hosts.yaml python3 contrib/inventory_builder/inventory.py ${IPS[@]}
+______________________________________________________________________________________________________________________________________________________________________
+
+
+step 4) Modify the inventory file  :
+vi inventory/mycluster/hosts.yaml
+
+_________________________________________________________________________________________________________________________________________________________________________
+
+Step 5) To enable addons like kuberenetes dashboard and ingress controller, set the parameters as enabled in the file “inventory/mycluster/group_vars/k8s_cluster/addons.yml”   :
+
+vi inventory/mycluster/group_vars/k8s_cluster/addons.yml
+-----------
+dashboard_enabled: true
+ingress_nginx_enabled: true
+ingress_nginx_host_network: true
+
+______________________________________________________________________________________________________________________________________________________________________________
+
+Also run the following command on each node :
+
+echo "root ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/root
+
+_________________________________________________________________________________________________________________________________________________________________________________
+
+
+Step 6) Disable Firewall and Enable IPV4 forwarding   :
+
+cd kubespray
+ansible all -i inventory/mycluster/hosts.yaml -m shell -a "sudo systemctl stop firewalld && sudo systemctl disable firewalld"
+
+__________________________________________________________________________________________________________________________________________________________________________________
+
+Run following ansible commands to enable IPv4 forwarding and disable swap on all the nodes :
+
+ansible all -i inventory/mycluster/hosts.yaml -m shell -a "echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.conf"
+
+ansible all -i inventory/mycluster/hosts.yaml -m shell -a "sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab && sudo swapoff -a"
+
+____________________________________________________________________________________________________________________________________________________________________________________
+
+Step 7) Start Kubernetes deployment  :
+cd kubespray
+ansible-playbook -i inventory/mycluster/hosts.yaml --become --become-user=root cluster.yml
+
+_______________________________________________________________________________________________________________________________________________________________________________
+
+Step 8) Access Kubernetes cluster
+Login to first master node, switch to root user, run kubectl commands from there,
+
+sudo su -
+kubectl get nodes
